@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live poll - screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0a0a0a; --yellow:#fae308; --white:#ffffff; --gray:#b8b8b8; --dim:#777; --rule:#3a3a3a; --cut:#0a0a0a; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; background:var(--bg); color:var(--white); font-family:Inter,system-ui,sans-serif; overflow:hidden; cursor:default; }
+  #stage { position:absolute; inset:0; }
+
+  /* join view */
+  #join { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:7vw; }
+  #join .txt h1 { font-size:6.2vw; font-weight:800; line-height:1.05; }
+  #join .txt h1 em { color:var(--yellow); font-style:normal; }
+  #join .txt p { font-size:2vw; color:var(--gray); margin-top:2vw; line-height:1.4; }
+  #join .txt .count { font-size:2.4vw; margin-top:3vw; color:var(--white); }
+  #join .txt .count b { color:var(--yellow); font-size:3.4vw; }
+  .qrbox { background:#fff; padding:1.6vw; border-radius:1.4vw; line-height:0; }
+  #url { font-size:1.4vw; color:var(--dim); margin-top:1.4vw; word-break:break-all; max-width:40vw; }
+
+  /* question view */
+  #qv { position:absolute; inset:0; display:none; }
+  /* headline in deck style: left-aligned, yellow rule */
+  #qhead { position:absolute; top:5vh; left:5vw; right:24vw; }
+  #qhead::before { content:""; display:block; width:5vw; height:.55vh; background:var(--yellow); margin-bottom:2.2vh; }
+  #qnum { font-size:1.2vw; color:var(--gray); font-weight:600; }
+  #qtext { font-size:3.6vw; font-weight:800; line-height:1.1; margin-top:.8vh; }
+  /* two piles grow from a common floor */
+  #field { position:absolute; left:5vw; right:5vw; top:27vh; bottom:22vh; }
+  #floor { position:absolute; left:5vw; right:5vw; bottom:22vh; height:2px; background:var(--rule); }
+  #air { position:absolute; left:50%; top:23vh; transform:translateX(-50%); font-size:1vw; color:var(--dim); letter-spacing:.08em; transition:opacity .4s; }
+  .v { position:absolute; left:0; top:0; transition:transform .9s cubic-bezier(.34,1.35,.64,1), color .4s, opacity .5s; will-change:transform; }
+  .v .bob { line-height:0; }
+  .v.air .bob { animation:hover 2.6s ease-in-out infinite; }
+  .v .m { line-height:0; }
+  .v.pop .m { animation:land .5s ease; }
+  @keyframes hover { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+  @keyframes land { 0%{transform:scale(.5) translateY(-10px)} 55%{transform:scale(1.18,.86)} 80%{transform:scale(.95,1.06)} 100%{transform:scale(1)} }
+  /* tug-of-war bar */
+  #bar { position:absolute; left:5vw; right:5vw; bottom:9vh; height:9vh; display:flex; border-radius:1.2vh; overflow:hidden; background:#1a1a1a; }
+  #bar .seg { height:100%; display:flex; align-items:center; gap:1.2vw; padding:0 1.6vw; transition:flex-basis 1s cubic-bezier(.2,.8,.2,1); flex:0 0 50%; min-width:0; overflow:hidden; white-space:nowrap; }
+  #ba { background:var(--yellow); color:#0a0a0a; --cut:var(--yellow); }
+  #bb { background:#f2f2f2; color:#0a0a0a; justify-content:flex-end; --cut:#f2f2f2; }
+  #bar .ic { line-height:0; flex:none; }
+  #bar .t { font-size:1.45vw; font-weight:600; overflow:hidden; text-overflow:ellipsis; }
+  #bar .p { font-size:3.4vw; font-weight:800; flex:none; }
+  #bar .knot { position:absolute; top:-1.2vh; bottom:-1.2vh; width:.5vw; background:var(--bg); left:50%; transform:translateX(-50%); transition:left 1s cubic-bezier(.2,.8,.2,1); }
+  #foot { position:absolute; bottom:2.4vh; left:5vw; right:5vw; display:flex; justify-content:space-between; align-items:flex-end; font-size:1.05vw; color:var(--dim); }
+  #mini { display:flex; align-items:center; gap:1vw; }
+  #mini .qrbox { padding:.4vw; border-radius:.5vw; }
+  #n b { color:var(--white); }
+
+  /* idle */
+  #idle { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:2vh; color:var(--dim); font-size:1.6vw; }
+  #idle b { color:var(--yellow); font-size:3vw; }
+
+  #help { position:fixed; right:1vw; top:1vh; font-size:11px; color:#444; text-align:right; line-height:1.5; }
+  #conn { position:fixed; left:1vw; top:1vh; width:9px; height:9px; border-radius:50%; background:#444; }
+  #conn.ok { background:#3c8; } #conn.bad { background:#e44; }
+  #pinbox { position:fixed; inset:0; background:var(--bg); display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px; }
+  #pinbox input { font-size:24px; padding:10px 14px; border-radius:8px; border:1px solid var(--rule); background:#111; color:#fff; text-align:center; width:260px; }
+  #pinbox button { font-size:18px; padding:10px 22px; border-radius:8px; border:0; background:var(--yellow); color:#000; font-weight:800; cursor:pointer; }
+  #pinerr { color:#e44; min-height:20px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <section id="join">
+    <div class="txt">
+      <h1>Grab your phone.<br><em>Scan to vote.</em></h1>
+      <p>No app, no sign-up, no data collected.<br>Keep the page open during the talk.</p>
+      <div class="count"><b id="joined">0</b> phones connected</div>
+    </div>
+    <div><div class="qrbox" id="qrBig"></div><div id="url"></div></div>
+  </section>
+
+  <section id="qv">
+    <div id="qhead"><div id="qnum"></div><div id="qtext"></div></div>
+    <div id="air">UNDECIDED</div>
+    <div id="field"></div>
+    <div id="floor"></div>
+    <div id="bar">
+      <div class="seg" id="ba"><div class="ic"></div><div class="p">–</div><div class="t"></div></div>
+      <div class="seg" id="bb"><div class="t"></div><div class="p">–</div><div class="ic"></div></div>
+      <div class="knot" id="knot"></div>
+    </div>
+    <div id="foot"><div id="n"></div><div id="mini"><span id="miniurl"></span><div class="qrbox" id="qrSmall"></div></div></div>
+  </section>
+
+  <section id="idle"><b id="idleTitle"></b><span>Waiting for the next question</span></section>
+</div>
+<div id="conn" title="connection"></div>
+<div id="help">→ / space: next · ← back · J: join screen · I: pause (phones wait) · H: hide this</div>
+<div id="pinbox"><div>Presenter PIN</div><input id="pin" type="password" autofocus><button id="pinok">Start</button><div id="pinerr"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="icons.js"></script>
+<script>
+(function () {
+  const CFG = window.POLL_CONFIG;
+  const params = new URLSearchParams(location.search);
+  const DEMO = params.has("demo");
+  const $ = (id) => document.getElementById(id);
+  const QN = CFG.questions.length;
+
+  // ---------- join URL + QR codes ----------
+  const joinUrl = location.href.split("?")[0].replace(/screen\.html$/, "") + (DEMO ? "index.html?demo" : "");
+  const shortUrl = joinUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  $("url").textContent = shortUrl; $("miniurl").textContent = shortUrl;
+  function qr(el, size) { try { new QRCode(el, { text: joinUrl, width: size, height: size, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { el.textContent = "QR unavailable"; } }
+  qr($("qrBig"), Math.round(window.innerWidth * 0.26));
+  qr($("qrSmall"), Math.round(window.innerWidth * 0.055));
+  $("idleTitle").textContent = CFG.eventTitle;
+
+  // ---------- state ----------
+  // view: "join" | "q" | "idle" ; q = question index
+  let view = "join", q = 0;
+  const voters = new Map();   // id -> {x, q, t, el, icon}
+  const seen = new Set();     // phones that said hello
+
+  function hash(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    h ^= h >>> 16; h = Math.imul(h, 2246822507); h ^= h >>> 13; h = Math.imul(h, 3266489909); h ^= h >>> 16;
+    return (h >>> 0) / 4294967295;
+  }
+
+  // ---------- presenter: tell the phones which question is live ----------
+  let sb = null, pin = null;
+  async function pushState() {
+    const live = view === "q" ? q : -1;
+    if (DEMO || !sb) return;
+    const { error } = await sb.rpc("set_question", { p_event: CFG.eventId, p_pin: pin, p_q: live });
+    $("conn").className = error ? "bad" : "ok";
+    if (error) console.error(error);
+  }
+
+  // ---------- rendering ----------
+  function renderView() {
+    $("join").style.display = view === "join" ? "flex" : "none";
+    $("qv").style.display = view === "q" ? "block" : "none";
+    $("idle").style.display = view === "idle" ? "flex" : "none";
+    if (view !== "q") return;
+    const Q = CFG.questions[q];
+    $("qnum").textContent = `${CFG.eventTitle} · live poll ${q + 1}/${QN}`;
+    $("qtext").textContent = Q.text;
+    const isz = Math.round(innerHeight * 0.065);
+    $("ba").querySelector(".ic").innerHTML = pollIconSvg(Q.a.icon, isz);
+    $("bb").querySelector(".ic").innerHTML = pollIconSvg(Q.b.icon, isz);
+    $("ba").querySelector(".t").textContent = Q.a.short || Q.a.label;
+    $("bb").querySelector(".t").textContent = Q.b.short || Q.b.label;
+    // drop dots from other questions
+    for (const [id, v] of voters) { if (v.q !== q && v.el) { v.el.remove(); v.el = null; } }
+    renderDots();
+  }
+
+  // pile geometry: brick-stacked mound per side, filled from the centre outwards
+  const ROWF = 0.8, COLF = 0.92;
+  function rowCaps(sideW, H, size) {
+    const c = Math.max(1, Math.floor(sideW / (size * COLF)));
+    const maxRows = Math.max(1, Math.floor((H - size) / (size * ROWF)) + 1);
+    const caps = []; for (let r = 0; r < maxRows; r++) caps.push(Math.max(1, c - r));
+    return caps;
+  }
+  function capacity(caps) { return caps.reduce((s, x) => s + x, 0); }
+  function centerOut(n) { const m = Math.floor((n - 1) / 2), o = [m]; for (let d = 1; o.length < n; d++) { if (m + d < n) o.push(m + d); if (m - d >= 0 && o.length < n) o.push(m - d); } return o; }
+
+  function renderDots() {
+    if (view !== "q") return;
+    const Q = CFG.questions[q];
+    const field = $("field"), W = field.clientWidth, H = field.clientHeight;
+    const list = [...voters.entries()].filter(([, v]) => v.q === q);
+    const now = Date.now();
+    const sides = { a: [], b: [], u: [] };
+    for (const [id, v] of list) {
+      const s = v.x < 0.38 ? "a" : v.x > 0.62 ? "b" : "u";
+      if (v.side !== s) { v.side = s; v.sideT = now + hash(id) ; }
+      sides[s].push([id, v]);
+    }
+    const sideW = W / 2 - W * 0.04;
+    let size = 64;
+    while (size > 14 && capacity(rowCaps(sideW, H, size)) < Math.max(sides.a.length, sides.b.length)) size -= 2;
+    const caps = rowCaps(sideW, H, size);
+    const slots = [];   // [{x,y}] in fill order, relative to side centre
+    caps.forEach((cap, r) => { for (const k of centerOut(cap)) slots.push({ x: (k - (cap - 1) / 2) * size * COLF + (r % 2 ? size * 0.18 : 0), y: H - size - r * size * ROWF }); });
+
+    for (const s of ["a", "b", "u"]) {
+      sides[s].sort((p1, p2) => p1[1].sideT - p2[1].sideT);
+      const cx = s === "a" ? W * 0.25 : W * 0.75;
+      sides[s].forEach(([id, v], i) => {
+        if (!v.el) {
+          v.el = document.createElement("div"); v.el.className = "v air";
+          v.el.innerHTML = `<div class="bob" style="animation-delay:${(-hash(id + "d") * 2.6).toFixed(2)}s"><div class="m"></div></div>`;
+          v.el.style.transform = `translate(${W / 2 - size / 2 + (hash(id + "s") - 0.5) * W * 0.5}px, ${-size * 2}px)`;
+          v.el.style.opacity = 0;
+          field.appendChild(v.el); v.icon = null;
+          void v.el.offsetWidth;
+          v.el.style.opacity = 1;
+        }
+        let left, top;
+        if (s === "u") {
+          left = W / 2 - size / 2 + (hash(id + "u") - 0.5) * W * 0.16;
+          top = size * 0.4 + hash(id + "v") * H * 0.22;
+        } else {
+          const slot = slots[Math.min(i, slots.length - 1)];
+          const jx = (hash(id + "jx") - 0.5) * size * 0.14, jy = (hash(id + "jy") - 0.5) * size * 0.08;
+          left = cx + slot.x - size / 2 + jx; top = slot.y + jy;
+        }
+        v.el.classList.toggle("air", s === "u");
+        v.el.style.transform = `translate(${left}px, ${top}px)`;
+        v.el.style.zIndex = s === "u" ? 5 : 1000 - i;
+        const ic = s === "a" ? Q.a.icon : s === "b" ? Q.b.icon : "dot";
+        v.el.style.color = s === "a" ? "var(--yellow)" : s === "b" ? "var(--white)" : "var(--dim)";
+        if (ic !== v.icon || v.size !== size) {
+          v.el.querySelector(".m").innerHTML = pollIconSvg(ic, ic === "dot" ? Math.round(size * 0.5) : size);
+          if (ic !== v.icon && s !== "u") { v.el.classList.remove("pop"); void v.el.offsetWidth; v.el.classList.add("pop"); }
+          v.icon = ic; v.size = size;
+        }
+      });
+    }
+    const a = list.filter(([, v]) => v.x < 0.5).length, b = list.filter(([, v]) => v.x > 0.5).length;
+    const tot = a + b, pa = tot ? a / tot * 100 : 50;
+    $("ba").style.flexBasis = pa + "%"; $("bb").style.flexBasis = (100 - pa) + "%";
+    $("knot").style.left = pa + "%";
+    $("ba").querySelector(".p").textContent = tot ? Math.round(pa) + "%" : "–";
+    $("bb").querySelector(".p").textContent = tot ? (100 - Math.round(pa)) + "%" : "–";
+    $("air").style.opacity = sides.u.length ? 1 : 0;
+    $("n").innerHTML = `<b>${list.length}</b> votes`;
+  }
+
+  let raf = 0;
+  function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderDots(); }); }
+
+  function onVote(p) {
+    if (!p || typeof p.id !== "string" || p.id.length > 40) return;
+    const x = Number(p.x), qq = Number(p.q);
+    if (!(x >= 0 && x <= 1) || !Number.isInteger(qq)) return;
+    seen.add(p.id);
+    const v = voters.get(p.id) || {};
+    if (v.q !== qq && v.el) { v.el.remove(); v.el = null; }
+    Object.assign(v, { x, q: qq, t: Date.now() });
+    voters.set(p.id, v);
+    $("joined").textContent = seen.size;
+    schedule();
+  }
+  function onHello(p) { if (p && typeof p.id === "string" && p.id.length <= 40) { seen.add(p.id); $("joined").textContent = seen.size; } }
+
+  // ---------- keys ----------
+  function go(nextView, nextQ) {
+    view = nextView; if (nextQ !== undefined) q = Math.max(0, Math.min(QN - 1, nextQ));
+    renderView(); pushState();
+  }
+  addEventListener("keydown", (e) => {
+    if ($("pinbox").style.display === "flex") return;
+    const k = e.key;
+    if (k === "ArrowRight" || k === " " || k === "PageDown") {
+      if (view === "join") go("q", 0);
+      else if (view === "idle") go("q", q);
+      else if (q < QN - 1) go("q", q + 1);
+      e.preventDefault();
+    } else if (k === "ArrowLeft" || k === "PageUp") {
+      if (view === "q" && q > 0) go("q", q - 1);
+      else if (view === "q") go("join");
+    } else if (k === "j" || k === "J") go("join");
+    else if (k === "i" || k === "I") go("idle");
+    else if (k === "h" || k === "H") $("help").style.display = $("help").style.display === "none" ? "" : "none";
+    else if (/^[1-9]$/.test(k) && +k <= QN) go("q", +k - 1);
+  });
+  addEventListener("resize", () => { for (const v of voters.values()) { v.size = null; } renderView(); });
+
+  // ---------- connect ----------
+  async function connect() {
+    sb = supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { realtime: { params: { eventsPerSecond: 50 } } });
+    const ch = sb.channel("poll-" + CFG.eventId, { config: { broadcast: { self: false } } });
+    ch.on("broadcast", { event: "vote" }, (m) => onVote(m.payload))
+      .on("broadcast", { event: "hello" }, (m) => onHello(m.payload))
+      .subscribe((status) => { $("conn").className = status === "SUBSCRIBED" ? "ok" : (status === "CHANNEL_ERROR" || status === "TIMED_OUT") ? "bad" : ""; });
+    pushState();
+  }
+
+  function askPin() {
+    try { pin = params.get("pin") || sessionStorage.getItem("poll_pin"); } catch (e) { pin = params.get("pin"); }
+    if (pin) { verify(); return; }
+    $("pinbox").style.display = "flex"; $("pin").focus();
+  }
+  async function verify() {
+    sb = supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
+    const { error } = await sb.rpc("set_question", { p_event: CFG.eventId, p_pin: pin, p_q: -1 });
+    if (error) { $("pinerr").textContent = "PIN not accepted"; $("pinbox").style.display = "flex"; pin = null; try { sessionStorage.removeItem("poll_pin"); } catch (e) {} return; }
+    try { sessionStorage.setItem("poll_pin", pin); } catch (e) {}
+    $("pinbox").style.display = "none"; connect();
+  }
+  $("pinok").addEventListener("click", () => { pin = $("pin").value.trim(); if (pin) verify(); });
+  $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") $("pinok").click(); e.stopPropagation(); });
+
+  // ---------- demo mode: rehearsal / offline fallback ----------
+  function demo() {
+    $("conn").className = "ok";
+    const N = parseInt(params.get("n") || "70", 10);
+    const ids = Array.from({ length: N }, (_, i) => "demo" + i);
+    let joined = 0;
+    const jt = setInterval(() => { if (joined >= N) return clearInterval(jt); onHello({ id: ids[joined++] }); }, 60);
+    setInterval(() => {
+      if (view !== "q") return;
+      const lean = [0.62, 0.55, 0.3, 0.5][q % 4];   // share leaning to answer A
+      const fresh = ids.filter((id) => !voters.has(id) || voters.get(id).q !== q);
+      for (let i = 0; i < 3; i++) {
+        const pool = fresh.length && Math.random() < 0.85 ? fresh : ids;
+        const id = pool[Math.floor(Math.random() * pool.length)];
+        const r = Math.random();
+        const x = r < 0.1 ? 0.4 + Math.random() * 0.2 : (Math.random() < lean ? Math.random() * 0.3 : 0.7 + Math.random() * 0.3);
+        onVote({ id, q, x });
+      }
+    }, 400);
+  }
+
+  renderView();
+  if (DEMO) demo(); else askPin();
+})();
+</script>
+</body>
+</html>

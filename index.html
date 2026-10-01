@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Vote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0a0a0a; --yellow:#fae308; --white:#ffffff; --gray:#b8b8b8; --dim:#777; --rule:#3a3a3a; --cut:#0a0a0a; }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:var(--bg); color:var(--white); font-family:Inter,system-ui,sans-serif; overflow:hidden; overscroll-behavior:none; }
+  body { display:flex; flex-direction:column; padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)); user-select:none; -webkit-user-select:none; touch-action:none; }
+  header { font-size:13px; color:var(--dim); display:flex; justify-content:space-between; }
+  header b { color:var(--yellow); font-weight:800; }
+  #wait { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:18px; }
+  #wait h1 { font-size:26px; font-weight:800; line-height:1.2; }
+  #wait p { color:var(--gray); font-size:16px; line-height:1.4; }
+  .pulse { width:18px; height:18px; border-radius:50%; background:var(--yellow); animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{transform:scale(.7);opacity:.5} 50%{transform:scale(1.15);opacity:1} }
+  #poll { flex:1; display:none; flex-direction:column; }
+  #qtext { font-size:24px; font-weight:800; line-height:1.2; margin:18px 0 14px; }
+  #hint { color:var(--gray); font-size:14px; margin-bottom:10px; }
+  .sides { display:flex; justify-content:space-between; gap:12px; }
+  .side { width:46%; display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 6px; border-radius:14px; border:1px solid var(--rule); cursor:pointer; transition:background .2s, border-color .2s; }
+  .side span { font-size:14px; font-weight:600; line-height:1.25; }
+  .side.a { color:var(--yellow); } .side.b { color:var(--white); }
+  .side.on.a { background:rgba(250,227,8,.12); border-color:var(--yellow); }
+  .side.on.b { background:rgba(255,255,255,.1); border-color:var(--white); }
+  #track { position:relative; flex:1; min-height:140px; margin:18px 0 8px; border-radius:18px; background:linear-gradient(90deg, rgba(250,227,8,.14), rgba(255,255,255,0) 50%, rgba(255,255,255,.1)); border:1px solid var(--rule); }
+  #track::after { content:""; position:absolute; left:50%; top:12px; bottom:12px; border-left:1px dashed var(--rule); }
+  #me { position:absolute; top:50%; width:76px; height:76px; margin:-38px 0 0 -38px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--dim); touch-action:none; z-index:2; }
+  #me.anim { transition:left .35s cubic-bezier(.2,.8,.2,1); }
+  #me svg { transition:transform .25s; }
+  #me.pop svg { animation:pop .35s ease; }
+  #me.idle::before { content:""; position:absolute; inset:6px; border-radius:50%; border:2px solid var(--yellow); animation:ring 1.6s ease-out infinite; }
+  @keyframes ring { 0%{transform:scale(.55);opacity:.9} 100%{transform:scale(1.25);opacity:0} }
+  #arrows { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); display:flex; justify-content:space-between; padding:0 6px; color:var(--dim); font-size:22px; pointer-events:none; }
+  @keyframes pop { 0%{transform:scale(.6)} 60%{transform:scale(1.2)} 100%{transform:scale(1)} }
+  #status { text-align:center; font-size:14px; color:var(--gray); min-height:20px; }
+  #status b { color:var(--yellow); }
+  #net { position:fixed; right:12px; bottom:max(10px,env(safe-area-inset-bottom)); font-size:11px; color:var(--dim); }
+</style>
+</head>
+<body>
+<header><b id="ev"></b><span id="who"></span></header>
+
+<section id="wait">
+  <div class="pulse"></div>
+  <h1>You're in.</h1>
+  <p>Keep this page open.<br>The next question appears here automatically.</p>
+</section>
+
+<section id="poll">
+  <div id="qtext"></div>
+  <div class="sides">
+    <div class="side a" id="sa"></div>
+    <div class="side b" id="sb"></div>
+  </div>
+  <div id="track"><div id="arrows"><span>◀</span><span>▶</span></div><div id="me"></div></div>
+  <div id="status">Drag your dot to one side, or tap an answer.</div>
+</section>
+<div id="net"></div>
+
+<script src="config.js"></script>
+<script src="icons.js"></script>
+<script>
+(function () {
+  const CFG = window.POLL_CONFIG;
+  const params = new URLSearchParams(location.search);
+  const DEMO = params.has("demo");
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- identity (a random id per phone; nothing personal) ----------
+  function makeId() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+  let myId;
+  try { myId = localStorage.getItem("poll_id"); if (!myId) { myId = makeId(); localStorage.setItem("poll_id", myId); } }
+  catch (e) { myId = makeId(); }
+
+  $("ev").textContent = CFG.eventTitle;
+  $("who").textContent = CFG.speaker || "";
+
+  const headers = { apikey: CFG.supabaseAnonKey, Authorization: "Bearer " + CFG.supabaseAnonKey, "Content-Type": "application/json" };
+  const topic = "poll-" + CFG.eventId;
+
+  // ---------- sending a vote: one HTTP request, no open connection ----------
+  let restStyle = 0; // 0 = path endpoint, 1 = messages endpoint
+  async function send(event, payload) {
+    if (DEMO) return true;
+    try {
+      if (restStyle === 0) {
+        const r = await fetch(`${CFG.supabaseUrl}/realtime/v1/api/broadcast/${topic}/events/${event}`,
+          { method: "POST", headers, body: JSON.stringify(payload) });
+        if (r.ok) return true;
+        if (r.status === 404 || r.status === 405) restStyle = 1; else return false;
+      }
+      const r2 = await fetch(`${CFG.supabaseUrl}/realtime/v1/api/broadcast`,
+        { method: "POST", headers, body: JSON.stringify({ messages: [{ topic, event, payload, private: false }] }) });
+      return r2.ok;
+    } catch (e) { return false; }
+  }
+
+  // ---------- reading the current question ----------
+  let currentQ = null, myX = 0.5, voted = false, lastSent = 0;
+  async function readState() {
+    if (DEMO) return params.has("q") ? parseInt(params.get("q"), 10) : 0;
+    const r = await fetch(`${CFG.supabaseUrl}/rest/v1/poll_state?event_id=eq.${encodeURIComponent(CFG.eventId)}&select=q`, { headers });
+    if (!r.ok) throw new Error("state " + r.status);
+    const rows = await r.json();
+    return rows.length ? rows[0].q : -1;
+  }
+
+  async function tick() {
+    try {
+      const q = await readState();
+      $("net").textContent = "";
+      if (q !== currentQ) showQuestion(q);
+      if (voted && currentQ >= 0 && Date.now() - lastSent > 20000) sendVote(); // refresh, in case the screen reloaded
+    } catch (e) { $("net").textContent = "reconnecting…"; }
+    setTimeout(tick, 2500);
+  }
+
+  // ---------- UI ----------
+  const me = $("me"), track = $("track");
+  function iconFor(x) {
+    const q = CFG.questions[currentQ];
+    if (!q) return "dot";
+    if (x < 0.38) return q.a.icon;
+    if (x > 0.62) return q.b.icon;
+    return "dot";
+  }
+  let lastIcon = null;
+  function renderMe(animate) {
+    me.classList.toggle("anim", !!animate);
+    me.style.left = (13 + myX * 74) + "%";
+    const ic = iconFor(myX);
+    const color = myX < 0.38 ? "var(--yellow)" : myX > 0.62 ? "var(--white)" : "var(--dim)";
+    if (ic !== lastIcon) {
+      me.innerHTML = pollIconSvg(ic, ic === "dot" ? 44 : 70, "");
+      me.classList.remove("pop"); void me.offsetWidth; me.classList.add("pop");
+      lastIcon = ic;
+    }
+    me.style.color = color;
+    me.classList.toggle("idle", !voted && !dragging);
+    $("sa").classList.toggle("on", voted && myX < 0.5);
+    $("sb").classList.toggle("on", voted && myX > 0.5);
+  }
+
+  function showQuestion(q) {
+    currentQ = q;
+    const Q = CFG.questions[q];
+    if (q < 0 || !Q) { $("poll").style.display = "none"; $("wait").style.display = "flex"; return; }
+    $("wait").style.display = "none"; $("poll").style.display = "flex";
+    $("qtext").textContent = Q.text;
+    $("sa").innerHTML = pollIconSvg(Q.a.icon, 40) + "<span></span>";
+    $("sa").querySelector("span").textContent = Q.a.label;
+    $("sb").innerHTML = pollIconSvg(Q.b.icon, 40) + "<span></span>";
+    $("sb").querySelector("span").textContent = Q.b.label;
+    myX = 0.5; voted = false; lastIcon = null;
+    $("status").textContent = "Drag your dot to one side, or tap an answer.";
+    renderMe(false);
+    if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
+  }
+
+  async function sendVote() {
+    lastSent = Date.now();
+    const ok = await send("vote", { id: myId, q: currentQ, x: Math.round(myX * 1000) / 1000 });
+    const Q = CFG.questions[currentQ];
+    if (!Q) return;
+    const side = myX < 0.5 ? Q.a.label : Q.b.label;
+    $("status").innerHTML = ok ? "Your vote: <b></b>" : "Couldn't send - try again";
+    if (ok) $("status").querySelector("b").textContent = side;
+  }
+
+  function commit() {
+    if (Math.abs(myX - 0.5) < 0.04) { myX = 0.5; voted = false; renderMe(true); return; }
+    voted = true; renderMe(true); sendVote();
+    if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) {} }
+  }
+
+  // drag
+  let dragging = false;
+  function xFromEvent(ev) {
+    const r = track.getBoundingClientRect();
+    const px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    return Math.min(1, Math.max(0, (px / r.width - 0.13) / 0.74));
+  }
+  track.addEventListener("pointerdown", (ev) => { dragging = true; track.setPointerCapture(ev.pointerId); myX = xFromEvent(ev); renderMe(false); });
+  track.addEventListener("pointermove", (ev) => { if (!dragging) return; myX = xFromEvent(ev); renderMe(false); });
+  const end = () => { if (!dragging) return; dragging = false; commit(); };
+  track.addEventListener("pointerup", end);
+  track.addEventListener("pointercancel", end);
+  $("sa").addEventListener("click", () => { myX = 0.02; commit(); });
+  $("sb").addEventListener("click", () => { myX = 0.98; commit(); });
+
+  send("hello", { id: myId });
+  tick();
+})();
+</script>
+</body>
+</html>
