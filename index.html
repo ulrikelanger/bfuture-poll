@@ -62,6 +62,7 @@
 </section>
 <div id="net"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="icons.js"></script>
 <script>
@@ -80,23 +81,23 @@
   $("ev").textContent = CFG.eventTitle;
   $("who").textContent = CFG.speaker || "";
 
-  const headers = { apikey: CFG.supabaseAnonKey, Authorization: "Bearer " + CFG.supabaseAnonKey, "Content-Type": "application/json" };
   const topic = "poll-" + CFG.eventId;
+  const sb = (!DEMO && window.supabase) ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
+  let live = false;
+  const channel = sb ? sb.channel(topic, { config: { broadcast: { self: false, ack: true } } }) : null;
+  if (channel) channel.subscribe((status) => { live = status === "SUBSCRIBED"; });
 
-  // ---------- sending a vote: one HTTP request, no open connection ----------
-  let restStyle = 0; // 0 = path endpoint, 1 = messages endpoint
+  // ---------- sending a vote: over the open connection, HTTP as fallback ----------
   async function send(event, payload) {
     if (DEMO) return true;
+    if (!channel) return false;
     try {
-      if (restStyle === 0) {
-        const r = await fetch(`${CFG.supabaseUrl}/realtime/v1/api/broadcast/${topic}/events/${event}`,
-          { method: "POST", headers, body: JSON.stringify(payload) });
-        if (r.ok) return true;
-        if (r.status === 404 || r.status === 405) restStyle = 1; else return false;
+      if (live) {
+        const res = await channel.send({ type: "broadcast", event, payload });
+        if (res === "ok") return true;
       }
-      const r2 = await fetch(`${CFG.supabaseUrl}/realtime/v1/api/broadcast`,
-        { method: "POST", headers, body: JSON.stringify({ messages: [{ topic, event, payload, private: false }] }) });
-      return r2.ok;
+      if (channel.httpSend) { await channel.httpSend(event, payload); return true; }
+      return false;
     } catch (e) { return false; }
   }
 
@@ -104,19 +105,18 @@
   let currentQ = null, myX = 0.5, voted = false, lastSent = 0;
   async function readState() {
     if (DEMO) return params.has("q") ? parseInt(params.get("q"), 10) : 0;
-    const r = await fetch(`${CFG.supabaseUrl}/rest/v1/poll_state?event_id=eq.${encodeURIComponent(CFG.eventId)}&select=q`, { headers });
-    if (!r.ok) throw new Error("state " + r.status);
-    const rows = await r.json();
-    return rows.length ? rows[0].q : -1;
+    const { data, error } = await sb.from("poll_state").select("q").eq("event_id", CFG.eventId);
+    if (error) throw error;
+    return data && data.length ? data[0].q : -1;
   }
 
   async function tick() {
     try {
       const q = await readState();
-      $("net").textContent = "";
+      $("net").textContent = DEMO ? "" : (live ? "● live" : "○ connecting…");
       if (q !== currentQ) showQuestion(q);
       if (voted && currentQ >= 0 && Date.now() - lastSent > 20000) sendVote(); // refresh, in case the screen reloaded
-    } catch (e) { $("net").textContent = "reconnecting…"; }
+    } catch (e) { $("net").textContent = "reconnecting… " + ((e && e.message) || "").slice(0, 60); }
     setTimeout(tick, 2500);
   }
 
@@ -193,7 +193,7 @@
   $("sa").addEventListener("click", () => { myX = 0.02; commit(); });
   $("sb").addEventListener("click", () => { myX = 0.98; commit(); });
 
-  send("hello", { id: myId });
+  setTimeout(() => send("hello", { id: myId }), 1500);
   tick();
 })();
 </script>

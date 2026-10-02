@@ -292,7 +292,7 @@
   async function verify() {
     sb = supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
     const { error } = await sb.rpc("set_question", { p_event: CFG.eventId, p_pin: pin, p_q: -1 });
-    if (error) { $("pinerr").textContent = "PIN not accepted"; $("pinbox").style.display = "flex"; pin = null; try { sessionStorage.removeItem("poll_pin"); } catch (e) {} return; }
+    if (error) { $("pinerr").textContent = /pin/i.test(error.message || "") ? "PIN not accepted" : "Connection problem: " + (error.message || "unknown"); $("pinbox").style.display = "flex"; pin = null; try { sessionStorage.removeItem("poll_pin"); } catch (e) {} return; }
     try { sessionStorage.setItem("poll_pin", pin); } catch (e) {}
     $("pinbox").style.display = "none"; connect();
   }
