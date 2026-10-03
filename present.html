@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Present</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#000; --panel:#111; --yellow:#fae308; --gray:#b8b8b8; --dim:#777; --rule:#333; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; background:var(--bg); color:#fff; font-family:Inter,system-ui,sans-serif; overflow:hidden; }
+  body.hidecursor, body.hidecursor * { cursor:none !important; }
+
+  #slide { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  #slide img { max-width:100%; max-height:100%; display:block; }
+  #poll { position:absolute; inset:0; width:100%; height:100%; border:0; opacity:0; pointer-events:none; transition:opacity .35s; background:#0a0a0a; }
+  #poll.on { opacity:1; }
+  #black { position:absolute; inset:0; background:#000; display:none; z-index:5; }
+
+  /* setup screen (before the talk) */
+  #setup { position:absolute; inset:0; z-index:10; background:var(--bg); display:flex; align-items:center; justify-content:center; }
+  #setup .box { width:min(720px,92vw); }
+  #setup h1 { font-size:28px; font-weight:800; margin-bottom:6px; }
+  #setup .sub { color:var(--gray); margin-bottom:26px; line-height:1.5; }
+  .step { border:1px solid var(--rule); border-radius:12px; padding:18px 20px; margin-bottom:14px; background:var(--panel); }
+  .step h2 { font-size:15px; color:var(--yellow); margin-bottom:10px; letter-spacing:.04em; text-transform:uppercase; }
+  .step p, .step li { color:var(--gray); font-size:15px; line-height:1.5; }
+  .step ul { padding-left:20px; }
+  .step code { color:#fff; background:#222; padding:1px 6px; border-radius:4px; }
+  #drop { border:2px dashed var(--rule); border-radius:12px; padding:30px; text-align:center; color:var(--gray); cursor:pointer; transition:border-color .2s, background .2s; }
+  #drop.over { border-color:var(--yellow); background:#1a1a0a; }
+  #drop b { color:#fff; }
+  input[type=password] { font-size:18px; padding:9px 12px; border-radius:8px; border:1px solid var(--rule); background:#000; color:#fff; width:240px; }
+  button { font-size:16px; padding:10px 20px; border-radius:8px; border:0; background:var(--yellow); color:#000; font-weight:800; cursor:pointer; }
+  button:disabled { opacity:.35; cursor:default; }
+  .ok { color:#3c8 !important; } .bad { color:#e55 !important; }
+  #status { margin-top:10px; font-size:14px; min-height:20px; }
+  #start { margin-top:8px; width:100%; padding:16px; font-size:18px; }
+
+  /* tiny presenter feedback while typing a slide number */
+  #jump { position:absolute; right:14px; bottom:12px; z-index:6; background:rgba(0,0,0,.75); color:#fff; font-size:15px; padding:6px 10px; border-radius:6px; display:none; }
+</style>
+</head>
+<body>
+<div id="slide"><img id="img" alt=""></div>
+<iframe id="poll" tabindex="-1" title="live poll"></iframe>
+<div id="black"></div>
+<div id="jump"></div>
+
+<section id="setup">
+  <div class="box">
+    <h1>Slides + live polls</h1>
+    <div class="sub">One window for the whole talk. Your clicker drives slides and polls.</div>
+
+    <div class="step" id="pinstep">
+      <h2>1 · Presenter PIN</h2>
+      <input id="pin" type="password" placeholder="PIN" autocomplete="off">
+      <span id="pinmsg" class="status"></span>
+    </div>
+
+    <div class="step">
+      <h2>2 · Your deck</h2>
+      <div id="drop"><b>Drag your PDF here</b><br>or click to choose it<br><small>Google Slides: File → Download → PDF document</small></div>
+      <input id="file" type="file" accept="application/pdf" hidden>
+      <div id="status"></div>
+    </div>
+
+    <div class="step">
+      <h2>How polls get in</h2>
+      <ul>
+        <li>A slide with <code>#poll1</code> on it is replaced by live poll 1, <code>#poll2</code> by poll 2, and so on.</li>
+        <li>A slide with <code>#join</code> on it shows the join screen with the QR code.</li>
+        <li>Keys: → / space / clicker = next · ← = back · type a number + Enter = jump to that slide · B = black screen · Esc = back to this page</li>
+      </ul>
+    </div>
+
+    <button id="start" disabled>Start presentation</button>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const DEMO = params.has("demo");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  let pages = [];      // [{url, kind:'slide'|'poll'|'join', q}]
+  let idx = 0, presenting = false, pinOk = DEMO, frameReady = false;
+  const poll = $("poll");
+
+  // ---------- poll screen in an invisible frame ----------
+  function loadFrame(pin) {
+    frameReady = false;
+    const q = DEMO ? "embed&demo" : "embed&pin=" + encodeURIComponent(pin);
+    poll.src = "screen.html?" + q;
+  }
+  function tellPoll(msg) { if (poll.contentWindow) poll.contentWindow.postMessage(Object.assign({ to: "poll-screen" }, msg), location.origin); }
+  addEventListener("message", (e) => {
+    if (e.origin !== location.origin || !e.data || e.data.from !== "poll-screen") return;
+    if (e.data.pin === "ok") { frameReady = true; pinOk = true; $("pinmsg").textContent = DEMO ? "  demo mode" : "  ✓ connected"; $("pinmsg").className = "ok"; try { sessionStorage.setItem("poll_pin", $("pin").value.trim()); } catch (x) {} ready(); }
+    else if (e.data.pin === "wrong") { pinOk = false; $("pinmsg").textContent = "  PIN not accepted"; $("pinmsg").className = "bad"; ready(); }
+    else if (e.data.pin === "error") { pinOk = false; $("pinmsg").textContent = "  connection problem – check Wi-Fi"; $("pinmsg").className = "bad"; ready(); }
+  });
+
+  if (DEMO) { $("pinstep").style.display = "none"; loadFrame(""); }
+  else {
+    let saved = params.get("pin") || ""; try { saved = saved || sessionStorage.getItem("poll_pin") || ""; } catch (e) {}
+    $("pin").value = saved;
+    if (saved) { $("pinmsg").textContent = "  checking…"; loadFrame(saved); }
+    $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") { const v = $("pin").value.trim(); if (v) { $("pinmsg").textContent = "  checking…"; $("pinmsg").className = ""; loadFrame(v); } } });
+    $("pin").addEventListener("blur", () => { const v = $("pin").value.trim(); if (v && !pinOk) { $("pinmsg").textContent = "  checking…"; $("pinmsg").className = ""; loadFrame(v); } });
+  }
+
+  // ---------- PDF loading ----------
+  const status = (t, cls) => { $("status").textContent = t; $("status").className = cls || ""; };
+  async function loadPdf(buf, remember) {
+    status("Reading PDF…");
+    pages.forEach((p) => URL.revokeObjectURL(p.url)); pages = [];
+    let doc;
+    try { doc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise; }
+    catch (e) { status("That file couldn't be read as a PDF.", "bad"); return; }
+    const W = screen.width * (devicePixelRatio || 1), H = screen.height * (devicePixelRatio || 1);
+    const found = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      status(`Preparing slide ${i} of ${doc.numPages}…`);
+      const page = await doc.getPage(i);
+      const v1 = page.getViewport({ scale: 1 });
+      const scale = Math.min(W / v1.width, H / v1.height);
+      const vp = page.getViewport({ scale });
+      const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+      const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+      const text = (await page.getTextContent()).items.map((t) => t.str).join(" ");
+      const mp = text.match(/#\s*poll\s*(\d+)/i), mj = /#\s*join\b/i.test(text);
+      const entry = { url: URL.createObjectURL(blob), kind: "slide", q: -1 };
+      if (mp) { entry.kind = "poll"; entry.q = parseInt(mp[1], 10) - 1; found.push(`slide ${i} → poll ${mp[1]}`); }
+      else if (mj) { entry.kind = "join"; found.push(`slide ${i} → join screen`); }
+      pages.push(entry);
+    }
+    status(`${doc.numPages} slides ready. ` + (found.length ? found.join(" · ") : "No #poll markers found – polls won't appear."), found.length ? "ok" : "bad");
+    if (remember) saveDeck(buf);
+    idx = 0; ready();
+  }
+  function ready() { $("start").disabled = !(pages.length && pinOk); }
+
+  const drop = $("drop");
+  drop.addEventListener("click", () => $("file").click());
+  $("file").addEventListener("change", async () => { const f = $("file").files[0]; if (f) loadPdf(await f.arrayBuffer(), true); });
+  ["dragenter", "dragover"].forEach((t) => addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((t) => addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  addEventListener("drop", async (e) => { const f = e.dataTransfer.files[0]; if (f && /pdf$/i.test(f.type || f.name)) loadPdf(await f.arrayBuffer(), true); else status("Please drop a PDF file.", "bad"); });
+
+  // remember the last deck in this browser, so an accidental reload doesn't lose it
+  function db() { return new Promise((res, rej) => { const r = indexedDB.open("present", 1); r.onupgradeneeded = () => r.result.createObjectStore("deck"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+  async function saveDeck(buf) { try { const d = await db(); d.transaction("deck", "readwrite").objectStore("deck").put(buf, "last"); } catch (e) {} }
+  async function loadSaved() { try { const d = await db(); const r = d.transaction("deck").objectStore("deck").get("last"); r.onsuccess = () => { if (r.result && !pages.length) { status("Loading your last deck…"); loadPdf(r.result, false); } }; } catch (e) {} }
+  loadSaved();
+
+  // ---------- presenting ----------
+  function show(i) {
+    idx = Math.max(0, Math.min(pages.length - 1, i));
+    const p = pages[idx];
+    $("img").src = p.url;
+    if (p.kind === "poll") { tellPoll({ view: "q", q: p.q }); poll.classList.add("on"); }
+    else if (p.kind === "join") { tellPoll({ view: "join" }); poll.classList.add("on"); }
+    else { if (poll.classList.contains("on")) tellPoll({ view: "idle" }); poll.classList.remove("on"); }
+    // warm the next image
+    if (pages[idx + 1]) { const im = new Image(); im.src = pages[idx + 1].url; }
+  }
+  $("start").addEventListener("click", () => {
+    presenting = true; $("setup").style.display = "none";
+    show(idx);
+    if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+    window.focus();
+  });
+
+  let typed = "", typedT = 0;
+  function showTyped() { $("jump").textContent = typed ? "Go to slide " + typed : ""; $("jump").style.display = typed ? "block" : "none"; }
+  addEventListener("keydown", (e) => {
+    if (!presenting) return;
+    const k = e.key;
+    if ($("black").style.display === "block" && k !== "b" && k !== "B" && k !== ".") { $("black").style.display = "none"; e.preventDefault(); return; }
+    if (/^[0-9]$/.test(k)) { typed += k; clearTimeout(typedT); typedT = setTimeout(() => { typed = ""; showTyped(); }, 3000); showTyped(); return; }
+    if (k === "Enter" && typed) { show(parseInt(typed, 10) - 1); typed = ""; showTyped(); e.preventDefault(); return; }
+    if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter", "n", "N"].includes(k)) { show(idx + 1); e.preventDefault(); }
+    else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace", "p", "P"].includes(k)) { show(idx - 1); e.preventDefault(); }
+    else if (k === "Home") show(0);
+    else if (k === "End") show(pages.length - 1);
+    else if (k === "b" || k === "B" || k === ".") $("black").style.display = $("black").style.display === "block" ? "none" : "block";
+    else if (k === "Escape") { presenting = false; $("setup").style.display = "flex"; }
+  });
+
+  // keep keyboard focus on this page (clicks never reach the poll frame)
+  addEventListener("blur", () => setTimeout(() => { if (presenting) window.focus(); }, 0));
+
+  // hide the mouse pointer while presenting
+  let mt = 0;
+  addEventListener("mousemove", () => { document.body.classList.remove("hidecursor"); clearTimeout(mt); mt = setTimeout(() => { if (presenting) document.body.classList.add("hidecursor"); }, 1500); });
+})();
+</script>
+</body>
+</html>

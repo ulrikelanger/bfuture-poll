@@ -106,7 +106,10 @@
   const CFG = window.POLL_CONFIG;
   const params = new URLSearchParams(location.search);
   const DEMO = params.has("demo");
+  const EMBED = params.has("embed");   // running inside present.html
   const $ = (id) => document.getElementById(id);
+  if (EMBED) $("help").style.display = "none";
+  function tellParent(msg) { if (EMBED && parent !== window) parent.postMessage(Object.assign({ from: "poll-screen" }, msg), location.origin); }
   const QN = CFG.questions.length;
 
   // ---------- join URL + QR codes ----------
@@ -277,7 +280,16 @@
     view = nextView; if (nextQ !== undefined) q = Math.max(0, Math.min(QN - 1, nextQ));
     renderView(); pushState();
   }
+  // commands from present.html (slides + polls in one window)
+  addEventListener("message", (e) => {
+    if (e.origin !== location.origin || !e.data || e.data.to !== "poll-screen") return;
+    const d = e.data;
+    if (d.view === "q" && Number.isInteger(d.q) && d.q >= 0 && d.q < QN) go("q", d.q);
+    else if (d.view === "join") go("join");
+    else if (d.view === "idle") go("idle");
+  });
   addEventListener("keydown", (e) => {
+    if (EMBED) return;
     if ($("pinbox").style.display === "flex") return;
     const k = e.key;
     if (k === "ArrowRight" || k === " " || k === "PageDown") {
@@ -313,9 +325,9 @@
   async function verify() {
     sb = supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
     const { error } = await sb.rpc("set_question", { p_event: CFG.eventId, p_pin: pin, p_q: -1 });
-    if (error) { $("pinerr").textContent = /pin/i.test(error.message || "") ? "PIN not accepted" : "Connection problem: " + (error.message || "unknown"); $("pinbox").style.display = "flex"; pin = null; try { sessionStorage.removeItem("poll_pin"); } catch (e) {} return; }
+    if (error) { tellParent({ pin: /pin/i.test(error.message || "") ? "wrong" : "error" }); $("pinerr").textContent = /pin/i.test(error.message || "") ? "PIN not accepted" : "Connection problem: " + (error.message || "unknown"); $("pinbox").style.display = "flex"; pin = null; try { sessionStorage.removeItem("poll_pin"); } catch (e) {} return; }
     try { sessionStorage.setItem("poll_pin", pin); } catch (e) {}
-    $("pinbox").style.display = "none"; connect();
+    $("pinbox").style.display = "none"; connect(); tellParent({ pin: "ok" });
   }
   $("pinok").addEventListener("click", () => { pin = $("pin").value.trim(); if (pin) verify(); });
   $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") $("pinok").click(); e.stopPropagation(); });
@@ -342,7 +354,9 @@
   }
 
   renderView();
-  if (DEMO) demo(); else askPin();
+  if (DEMO) { demo(); tellParent({ pin: "ok" }); } else askPin();
+  // phone count for the presenter page
+  setInterval(() => tellParent({ joined: seen.size }), 2000);
 })();
 </script>
 </body>
