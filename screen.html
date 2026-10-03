@@ -141,6 +141,25 @@
     if (error) console.error(error);
   }
 
+  // ---------- saving results (so the counts survive the talk) ----------
+  const saved = {};   // q -> "a/b/u" last saved
+  let saveTimer = 0;
+  function countsFor(qq) {
+    let a = 0, b = 0, u = 0;
+    for (const v of voters.values()) { if (v.q !== qq) continue; if (v.x < 0.5) a++; else if (v.x > 0.5) b++; else u++; }
+    return { a, b, u };
+  }
+  async function saveResult(qq) {
+    if (DEMO || !sb || !pin || qq < 0 || qq >= QN) return;
+    const c = countsFor(qq), key = c.a + "/" + c.b + "/" + c.u;
+    if (saved[qq] === key || c.a + c.b === 0) return;
+    const Q = CFG.questions[qq];
+    const { error } = await sb.rpc("save_result", { p_event: CFG.eventId, p_pin: pin, p_q: qq,
+      p_question: Q.text, p_a_label: Q.a.label, p_b_label: Q.b.label, p_a: c.a, p_b: c.b, p_undecided: c.u });
+    if (error) console.error("save_result", error); else saved[qq] = key;
+  }
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { if (view === "q") saveResult(q); }, 3000); }
+
   // ---------- rendering ----------
   function renderView() {
     $("join").style.display = view === "join" ? "flex" : "none";
@@ -232,6 +251,7 @@
     $("bb").querySelector(".p").textContent = tot ? (100 - Math.round(pa)) + "%" : "–";
     $("air").style.opacity = sides.u.length ? 1 : 0;
     $("n").innerHTML = `<b>${list.length}</b> votes`;
+    scheduleSave();
   }
 
   let raf = 0;
@@ -253,6 +273,7 @@
 
   // ---------- keys ----------
   function go(nextView, nextQ) {
+    if (view === "q") saveResult(q);
     view = nextView; if (nextQ !== undefined) q = Math.max(0, Math.min(QN - 1, nextQ));
     renderView(); pushState();
   }
