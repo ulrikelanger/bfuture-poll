@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Vote</title>
+<title>Live-Umfrage</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
@@ -47,8 +47,8 @@
 
 <section id="wait">
   <div class="pulse"></div>
-  <h1>You're in.</h1>
-  <p>Keep this page open.<br>The next question appears here automatically.</p>
+  <h1 data-t="in"></h1>
+  <p data-t="keepOpen"></p>
 </section>
 
 <section id="poll">
@@ -58,7 +58,7 @@
     <div class="side b" id="sb"></div>
   </div>
   <div id="track"><div id="arrows"><span>◀</span><span>▶</span></div><div id="me"></div></div>
-  <div id="status">Drag your dot to one side, or tap an answer.</div>
+  <div id="status" data-t="drag"></div>
 </section>
 <div id="net"></div>
 
@@ -113,10 +113,10 @@
   async function tick() {
     try {
       const q = await readState();
-      $("net").textContent = DEMO ? "" : (live ? "● live" : "○ connecting…");
+      $("net").textContent = DEMO ? "" : (live ? T("live") : T("connecting"));
       if (q !== currentQ) showQuestion(q);
       if (voted && currentQ >= 0 && Date.now() - lastSent > 20000) sendVote(); // refresh, in case the screen reloaded
-    } catch (e) { $("net").textContent = "reconnecting… " + ((e && e.message) || "").slice(0, 60); }
+    } catch (e) { $("net").textContent = T("reconnecting") + " " + ((e && e.message) || "").slice(0, 60); }
     setTimeout(tick, 2500);
   }
 
@@ -157,7 +157,7 @@
     $("sb").innerHTML = pollIconSvg(Q.b.icon, 40) + "<span></span>";
     $("sb").querySelector("span").textContent = Q.b.label;
     myX = 0.5; voted = false; lastIcon = null;
-    $("status").textContent = "Drag your dot to one side, or tap an answer.";
+    $("status").textContent = T("drag");
     renderMe(false);
     if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
   }
@@ -168,7 +168,7 @@
     const Q = CFG.questions[currentQ];
     if (!Q) return;
     const side = myX < 0.5 ? Q.a.label : Q.b.label;
-    $("status").innerHTML = ok ? "Your vote: <b></b>" : "Couldn't send - try again";
+    $("status").innerHTML = ok ? T("yourVote") + " <b></b>" : T("sendFail");
     if (ok) $("status").querySelector("b").textContent = side;
   }
 

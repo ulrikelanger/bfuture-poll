@@ -1,7 +1,8 @@
 // ============================================================
 //  ICON LIBRARY - original line/fill icons, 64x64, one color.
 //  Names: newspaper, coffee, barchart, notebook, pen, gear,
-//         beethoven, gummybear, dot
+//         beethoven, gummybear, dot,
+//         coins, banknotes, tv, crowd, hand
 //  To add one (e.g. "mozartkugel"), add an entry returning SVG
 //  inner markup drawn in a 64x64 box. Use "currentColor" for the
 //  shape and "var(--cut)" for details cut out of it.
@@ -106,7 +107,74 @@
       <circle cx="27.5" cy="16.5" r="1.8" ${CUT}/>
       <circle cx="36.5" cy="16.5" r="1.8" ${CUT}/>
       <ellipse cx="32" cy="22" rx="3.2" ry="2.4" ${CUT}/>
-      <ellipse cx="27" cy="34" rx="4" ry="6" fill="#ffffff" opacity="0.28"/>`
+      <ellipse cx="27" cy="34" rx="4" ry="6" fill="#ffffff" opacity="0.28"/>`,
+    // stack of coins plus one coin in front
+    coins: `
+      <g ${C}>
+        <ellipse cx="24" cy="50" rx="16" ry="6"/>
+        <rect x="8" y="40" width="32" height="10"/>
+        <ellipse cx="24" cy="40" rx="16" ry="6"/>
+        <rect x="8" y="30" width="32" height="10"/>
+        <ellipse cx="24" cy="30" rx="16" ry="6"/>
+        <rect x="8" y="20" width="32" height="10"/>
+        <ellipse cx="24" cy="20" rx="16" ry="6"/>
+      </g>
+      <g ${CUTS} stroke-width="2.2" fill="none">
+        <path d="M8 30 Q24 38 40 30"/><path d="M8 40 Q24 48 40 40"/>
+        <ellipse cx="24" cy="20" rx="11" ry="3.6"/>
+      </g>
+      <circle cx="46" cy="44" r="14" ${C}/>
+      <circle cx="46" cy="44" r="10" ${CUTS} stroke-width="2.2" fill="none"/>
+      <path d="M46 37 V51 M42.5 40.5 H48.5 Q50 40.5 50 42.2 Q50 44 48 44 H44 Q42 44 42 45.8 Q42 47.5 43.5 47.5 H49.5" ${CUTS} stroke-width="2.2" fill="none" stroke-linecap="round"/>`,
+
+    // fanned stack of three bank notes
+    banknotes: `
+      <rect x="14" y="13" width="46" height="26" rx="3" ${C} ${CUTS} stroke-width="2"/>
+      <rect x="9" y="19" width="46" height="26" rx="3" ${C} ${CUTS} stroke-width="2"/>
+      <rect x="4" y="25" width="46" height="26" rx="3" ${C} ${CUTS} stroke-width="2"/>
+      <rect x="8.5" y="29.5" width="37" height="17" rx="2" ${CUTS} stroke-width="2" fill="none"/>
+      <circle cx="27" cy="38" r="6" ${CUT}/>
+      <path d="M27 33.5 V42.5 M24.6 35.4 H28.2 Q29.4 35.4 29.4 36.7 Q29.4 38 28 38 H26 Q24.6 38 24.6 39.3 Q24.6 40.6 25.8 40.6 H29.4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <circle cx="14" cy="38" r="2" ${CUT}/><circle cx="40" cy="38" r="2" ${CUT}/>`,
+
+    // old-school TV set with antenna
+    tv: `
+      <g ${C}>
+        <path d="M24 8 L32 17 L40 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="24" cy="8" r="2.6"/><circle cx="40" cy="8" r="2.6"/>
+        <rect x="5" y="17" width="54" height="38" rx="6"/>
+        <rect x="14" y="55" width="6" height="6" rx="1.5"/><rect x="44" y="55" width="6" height="6" rx="1.5"/>
+      </g>
+      <rect x="10" y="22" width="36" height="28" rx="5" ${CUT}/>
+      <circle cx="52" cy="28" r="2.6" ${CUT}/><circle cx="52" cy="37" r="2.6" ${CUT}/>
+      <rect x="49.5" y="43" width="5" height="2.4" rx="1.2" ${CUT}/><rect x="49.5" y="47" width="5" height="2.4" rx="1.2" ${CUT}/>`,
+
+    // a crowd: five heads and shoulders
+    crowd: `
+      <g ${C}>
+        <circle cx="13" cy="24" r="6"/><path d="M3 44 Q3 32 13 32 Q23 32 23 44 Z"/>
+        <circle cx="51" cy="24" r="6"/><path d="M41 44 Q41 32 51 32 Q61 32 61 44 Z"/>
+        <circle cx="22" cy="31" r="6.5"/><path d="M11 52 Q11 39 22 39 Q33 39 33 52 Z"/>
+        <circle cx="42" cy="31" r="6.5"/><path d="M31 52 Q31 39 42 39 Q53 39 53 52 Z"/>
+      </g>
+      <circle cx="32" cy="35" r="8.6" ${CUT}/><path d="M18.5 60 Q18.5 43.5 32 43.5 Q45.5 43.5 45.5 60 Z" ${CUT}/>
+      <g ${C}>
+        <circle cx="32" cy="35" r="7"/><path d="M20 60 Q20 45 32 45 Q44 45 44 60 Z"/>
+      </g>`,
+
+    // an open hand, palm up ("a handful")
+    hand: `
+      <g ${C}>
+        <rect x="16" y="14" width="7" height="24" rx="3.5"/>
+        <rect x="24.5" y="8" width="7" height="30" rx="3.5"/>
+        <rect x="33" y="10" width="7" height="28" rx="3.5"/>
+        <rect x="41.5" y="16" width="7" height="22" rx="3.5"/>
+        <path d="M16 32 H48.5 V42 Q48.5 58 32 58 Q20 58 16 48 Z"/>
+        <rect x="6" y="30" width="7" height="20" rx="3.5" transform="rotate(-38 9.5 40)"/>
+      </g>
+      <g ${CUTS} stroke-width="1.8" stroke-linecap="round">
+        <line x1="23.7" y1="22" x2="23.7" y2="33"/><line x1="32.2" y1="18" x2="32.2" y2="33"/><line x1="40.7" y1="21" x2="40.7" y2="33"/>
+      </g>`
   };
 
   window.pollIconSvg = function (name, size, extraStyle) {

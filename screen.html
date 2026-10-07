@@ -71,16 +71,16 @@
 <div id="stage">
   <section id="join">
     <div class="txt">
-      <h1>Grab your phone.<br><em>Scan to vote.</em></h1>
-      <p>No app, no sign-up, no data collected.<br>Keep the page open during the talk.</p>
-      <div class="count"><b id="joined">0</b> phones connected</div>
+      <h1 data-t="joinHead"></h1>
+      <p data-t="joinSub"></p>
+      <div class="count"><b id="joined">0</b> <span data-t="phones"></span></div>
     </div>
     <div><div class="qrbox" id="qrBig"></div><div id="url"></div></div>
   </section>
 
   <section id="qv">
     <div id="qhead"><div id="qnum"></div><div id="qtext"></div></div>
-    <div id="air">UNDECIDED</div>
+    <div id="air" data-t="undecided"></div>
     <div id="field"></div>
     <div id="floor"></div>
     <div id="bar">
@@ -91,11 +91,11 @@
     <div id="foot"><div id="n"></div><div id="mini"><span id="miniurl"></span><div class="qrbox" id="qrSmall"></div></div></div>
   </section>
 
-  <section id="idle"><b id="idleTitle"></b><span>Waiting for the next question</span></section>
+  <section id="idle"><b id="idleTitle"></b><span data-t="waiting"></span></section>
 </div>
 <div id="conn" title="connection"></div>
 <div id="help">→ / space: next · ← back · J: join screen · I: pause (phones wait) · H: hide this</div>
-<div id="pinbox"><div>Presenter PIN</div><input id="pin" type="password" autofocus><button id="pinok">Start</button><div id="pinerr"></div></div>
+<div id="pinbox"><div data-t="pinTitle"></div><input id="pin" type="password" autofocus><button id="pinok" data-t="pinStart"></button><div id="pinerr"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -113,7 +113,7 @@
   const QN = CFG.questions.length;
 
   // ---------- join URL + QR codes ----------
-  const joinUrl = location.href.split("?")[0].replace(/screen\.html$/, "") + (DEMO ? "index.html?demo" : "");
+  const joinUrl = location.href.split("?")[0].replace(/screen\.html$/, "") + (DEMO ? "index.html?demo" + (CFG.isDefault ? "" : "&e=" + CFG.eventId) : (CFG.isDefault ? "" : "?e=" + CFG.eventId));
   const shortUrl = joinUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
   $("url").textContent = shortUrl; $("miniurl").textContent = shortUrl;
   function qr(el, size) { try { new QRCode(el, { text: joinUrl, width: size, height: size, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { el.textContent = "QR unavailable"; } }
@@ -170,8 +170,8 @@
     $("idle").style.display = view === "idle" ? "flex" : "none";
     if (view !== "q") return;
     const Q = CFG.questions[q];
-    $("qnum").textContent = `${CFG.eventTitle} · live poll ${q + 1}/${QN}`;
-    $("qtext").textContent = Q.text;
+    $("qnum").textContent = `${CFG.eventTitle} · ${T("pollOf")} ${q + 1}/${QN}`;
+    $("qtext").textContent = Q.text; $("qtext").style.fontSize = Q.text.length > 45 ? "2.9vw" : "";
     const isz = Math.round(innerHeight * 0.065);
     $("ba").querySelector(".ic").innerHTML = pollIconSvg(Q.a.icon, isz);
     $("bb").querySelector(".ic").innerHTML = pollIconSvg(Q.b.icon, isz);
@@ -253,7 +253,7 @@
     $("ba").querySelector(".p").textContent = tot ? Math.round(pa) + "%" : "–";
     $("bb").querySelector(".p").textContent = tot ? (100 - Math.round(pa)) + "%" : "–";
     $("air").style.opacity = sides.u.length ? 1 : 0;
-    $("n").innerHTML = `<b>${list.length}</b> votes`;
+    $("n").innerHTML = `<b>${list.length}</b> ${T("votes")}`;
     scheduleSave();
   }
 
@@ -325,7 +325,7 @@
   async function verify() {
     sb = supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
     const { error } = await sb.rpc("set_question", { p_event: CFG.eventId, p_pin: pin, p_q: -1 });
-    if (error) { tellParent({ pin: /pin/i.test(error.message || "") ? "wrong" : "error" }); $("pinerr").textContent = /pin/i.test(error.message || "") ? "PIN not accepted" : "Connection problem: " + (error.message || "unknown"); $("pinbox").style.display = "flex"; pin = null; try { sessionStorage.removeItem("poll_pin"); } catch (e) {} return; }
+    if (error) { tellParent({ pin: /pin/i.test(error.message || "") ? "wrong" : "error" }); $("pinerr").textContent = /pin/i.test(error.message || "") ? T("pinWrong") : T("connProblem") + (error.message || "unknown"); $("pinbox").style.display = "flex"; pin = null; try { sessionStorage.removeItem("poll_pin"); } catch (e) {} return; }
     try { sessionStorage.setItem("poll_pin", pin); } catch (e) {}
     $("pinbox").style.display = "none"; connect(); tellParent({ pin: "ok" });
   }

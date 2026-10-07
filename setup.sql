@@ -52,3 +52,13 @@ insert into public.poll_state (event_id, q) values ('bfuture26', -1)
 
 insert into public.poll_secrets (event_id, pin) values ('bfuture26', 'CHANGE-ME-PIN')  -- <== your PIN here
   on conflict (event_id) do update set pin = excluded.pin;
+
+-- ------------------------------------------------------------
+--  kress pro Innovation Day, Oct 8, 2026 (eventId kresspro26).
+--  Run only these two statements, once, with your PIN.
+-- ------------------------------------------------------------
+insert into public.poll_state (event_id, q) values ('kresspro26', -1)
+  on conflict (event_id) do nothing;
+
+insert into public.poll_secrets (event_id, pin) values ('kresspro26', 'CHANGE-ME-PIN')  -- <== your PIN here
+  on conflict (event_id) do update set pin = excluded.pin;

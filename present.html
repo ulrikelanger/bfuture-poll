@@ -94,7 +94,7 @@
   function loadFrame(pin) {
     frameReady = false;
     const q = DEMO ? "embed&demo" : "embed&pin=" + encodeURIComponent(pin);
-    poll.src = "screen.html?" + q;
+    poll.src = "screen.html?" + q + (params.get("e") ? "&e=" + encodeURIComponent(params.get("e")) : "");
   }
   function tellPoll(msg) { if (poll.contentWindow) poll.contentWindow.postMessage(Object.assign({ to: "poll-screen" }, msg), location.origin); }
   addEventListener("message", (e) => {
