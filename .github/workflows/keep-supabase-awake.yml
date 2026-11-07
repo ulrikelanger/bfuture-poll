@@ -1,0 +1,56 @@
+# Keeps the Supabase project from being paused for inactivity
+# (free-plan projects pause after 7 idle days).
+#
+# Every 3 days this sends one read-only request to the poll database.
+# It uses the same public key the poll pages already use, so no secret
+# is needed and nothing in the database is changed.
+#
+# GitHub switches off scheduled jobs in public repos after 60 days without
+# any commit. To prevent that, the first run of each month also updates
+# the date in .github/keepalive.txt with a tiny automatic commit.
+#
+# To run it by hand: GitHub > Actions > "Keep Supabase awake" > Run workflow.
+
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "17 14 */3 * *"   # every 3 days, 14:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the poll database
+        run: |
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "https://yvcrwgddivwjbohqbszv.supabase.co/rest/v1/poll_state?select=event_id&limit=1" \
+            -H "apikey: sb_publishable__ekTjoBPdCrSOy30ojSnrQ_6k41TdiN")
+          echo "Supabase answered with HTTP $status"
+          test "$status" = "200"
+
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Monthly activity commit so GitHub keeps this job switched on
+        run: |
+          day=$(date -u +%d)
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$day" -gt 3 ]; then
+            echo "Not the first run of the month, nothing to commit."
+            exit 0
+          fi
+          month=$(date -u +%Y-%m)
+          if grep -qx "$month" .github/keepalive.txt 2>/dev/null; then
+            echo "Already committed this month."
+            exit 0
+          fi
+          echo "$month" > .github/keepalive.txt
+          git config user.name "keepalive-bot"
+          git config user.email "keepalive-bot@users.noreply.github.com"
+          git add .github/keepalive.txt
+          git commit -m "Monthly keepalive ($month)"
+          git push
